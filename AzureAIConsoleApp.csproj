@@ -8,9 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\repos\azure-sdk-for-net\sdk\ai\Azure.AI.Client\src\Azure.AI.Client.csproj" />
+    <PackageReference Include="Azure.AI.Projects" Version="1.0.0-alpha.20241114.3" />
   </ItemGroup>
-
+  
    <ItemGroup>
     <PackageReference Include="Azure.Core" Version="1.44.1" />
     <PackageReference Include="NUnit" Version="4.2.2" />

@@ -1,4 +1,4 @@
-﻿using Azure.AI.Client;
+﻿using Azure.AI.Projects;
 using Azure.Identity;
 using NUnit.Framework;
 
@@ -8,39 +8,39 @@ namespace Azure.AI.Samples
     {
         public async static Task Main(string[] args)
         {
-            #region Snippet:OverviewCreateClient
-            var connectionString = Environment.GetEnvironmentVariable("AZURE_AI_CONNECTION_STRING");
-            AgentClient client = new AgentClient(connectionString, new DefaultAzureCredential());
-            #endregion
+            await AzureAIBasic();
+            await AzureAIStreaming();
+        }
+
+        public static async Task AzureAIBasic()
+        {
+            Console.WriteLine($"-------- Azure AI Basic Sample --------");
+
+            var connectionString = Environment.GetEnvironmentVariable("PROJECT_CONNECTION_STRING");
+            AgentsClient client = new AgentsClient(connectionString, new DefaultAzureCredential());
 
             // Step 1: Create an agent
-            #region Snippet:OverviewCreateAgent
             Response<Agent> agentResponse = await client.CreateAgentAsync(
                 model: "gpt-4-1106-preview",
                 name: "Math Tutor",
                 instructions: "You are a personal math tutor. Write and run code to answer math questions.",
                 tools: new List<ToolDefinition> { new CodeInterpreterToolDefinition() });
             Agent agent = agentResponse.Value;
-            #endregion
 
             // Intermission: agent should now be listed
 
             Response<PageableList<Agent>> agentListResponse = await client.GetAgentsAsync();
 
             //// Step 2: Create a thread
-            #region Snippet:OverviewCreateThread
             Response<AgentThread> threadResponse = await client.CreateThreadAsync();
             AgentThread thread = threadResponse.Value;
-            #endregion
 
             // Step 3: Add a message to a thread
-            #region Snippet:OverviewCreateMessage
             Response<ThreadMessage> messageResponse = await client.CreateMessageAsync(
                 thread.Id,
                 MessageRole.User,
                 "I need to solve the equation `3x + 11 = 14`. Can you help me?");
             ThreadMessage message = messageResponse.Value;
-            #endregion
 
             // Intermission: message is now correlated with thread
             // Intermission: listing messages will retrieve the message just added
@@ -49,15 +49,12 @@ namespace Azure.AI.Samples
             Assert.That(messagesListResponse.Value.Data[0].Id == message.Id);
 
             // Step 4: Run the agent
-            #region Snippet:OverviewCreateRun
             Response<ThreadRun> runResponse = await client.CreateRunAsync(
                 thread.Id,
                 agent.Id,
                 additionalInstructions: "Please address the user as Jane Doe. The user has a premium account.");
             ThreadRun run = runResponse.Value;
-            #endregion
 
-            #region Snippet:OverviewWaitForRun
             do
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(500));
@@ -65,9 +62,7 @@ namespace Azure.AI.Samples
             }
             while (runResponse.Value.Status == RunStatus.Queued
                 || runResponse.Value.Status == RunStatus.InProgress);
-            #endregion
 
-            #region Snippet:OverviewListUpdatedMessages
             Response<PageableList<ThreadMessage>> afterRunMessagesResponse
                 = await client.GetMessagesAsync(thread.Id);
             IReadOnlyList<ThreadMessage> messages = afterRunMessagesResponse.Value.Data;
@@ -89,7 +84,47 @@ namespace Azure.AI.Samples
                     Console.WriteLine();
                 }
             }
-            #endregion
+        }
+
+        public static async Task AzureAIStreaming()
+        {
+            Console.WriteLine($"-------- Azure AI Streaming Sample--------");
+
+            var connectionString = Environment.GetEnvironmentVariable("PROJECT_CONNECTION_STRING");
+            AgentsClient client = new AgentsClient(connectionString, new DefaultAzureCredential());
+
+            Response<Agent> agentResponse = await client.CreateAgentAsync(
+                model: "gpt-4-1106-preview",
+                name: "My Friendly Test Assistant",
+                instructions: "You politely help with math questions. Use the code interpreter tool when asked to visualize numbers.",
+                tools: new List<ToolDefinition> { new CodeInterpreterToolDefinition() });
+            Agent agent = agentResponse.Value;
+
+            Response<AgentThread> threadResponse = await client.CreateThreadAsync();
+            AgentThread thread = threadResponse.Value;
+
+            Response<ThreadMessage> messageResponse = await client.CreateMessageAsync(
+                thread.Id,
+                MessageRole.User,
+                "Hi, Assistant! Draw a graph for a line with a slope of 4 and y-intercept of 9.");
+            ThreadMessage message = messageResponse.Value;
+
+            await foreach (var streamingUpdate in client.CreateRunStreamingAsync(thread.Id, agent.Id))
+            {
+                Console.WriteLine(streamingUpdate.UpdateKind);
+                if (streamingUpdate.UpdateKind == StreamingUpdateReason.RunCreated)
+                {
+                    Console.WriteLine($"--- Run started! ---");
+                }
+                else if (streamingUpdate is MessageContentUpdate contentUpdate)
+                {
+                    Console.Write(contentUpdate.Text);
+                    if (contentUpdate.ImageFileId is not null)
+                    {
+                        Console.WriteLine($"[Image content file ID: {contentUpdate.ImageFileId}");
+                    }
+                }
+            }
         }
     }
 }
