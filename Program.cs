@@ -1,4 +1,5 @@
-﻿using Azure.AI.Projects;
+﻿using Azure.AI.Inference;
+using Azure.AI.Projects;
 using Azure.Identity;
 using NUnit.Framework;
 
@@ -10,6 +11,7 @@ namespace Azure.AI.Samples
         {
             await AzureAIBasic();
             await AzureAIStreaming();
+            await ConnectionExample();
         }
 
         public static async Task AzureAIBasic()
@@ -124,6 +126,47 @@ namespace Azure.AI.Samples
                         Console.WriteLine($"[Image content file ID: {contentUpdate.ImageFileId}");
                     }
                 }
+            }
+        }
+
+        public static async Task ConnectionExample()
+        {
+            var connectionString = Environment.GetEnvironmentVariable("PROJECT_CONNECTION_STRING");
+            var modelDeploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME");
+
+            AIProjectClient client = new AIProjectClient(connectionString, new DefaultAzureCredential());
+            var connectionsClient = client.GetConnectionsClient();
+
+            ConnectionResponse connection = connectionsClient.GetDefaultConnection(ConnectionType.Serverless, true);
+
+            if (connection.Properties.AuthType == AuthenticationType.ApiKey)
+            {
+                var apiKeyAuthProperties = connection.Properties as ConnectionPropertiesApiKeyAuth;
+                if (string.IsNullOrWhiteSpace(apiKeyAuthProperties.Target))
+                {
+                    throw new ArgumentException("The API key authentication target URI is missing or invalid.");
+                }
+
+                if (!Uri.TryCreate(apiKeyAuthProperties.Target, UriKind.Absolute, out var endpoint))
+                {
+                    throw new UriFormatException("Invalid URI format in API key authentication target.");
+                }
+
+                var credential = new AzureKeyCredential(apiKeyAuthProperties.Credentials.Key);
+                ChatCompletionsClient chatClient = new ChatCompletionsClient(endpoint, credential);
+
+                var requestOptions = new ChatCompletionsOptions()
+                {
+                    Messages =
+                {
+                    new ChatRequestSystemMessage("You are a helpful assistant."),
+                    new ChatRequestUserMessage("How many feet are in a mile?"),
+                },
+                    Model = modelDeploymentName
+                };
+
+                Response<ChatCompletions> response = await chatClient.CompleteAsync(requestOptions);
+                Console.WriteLine(response.Value.Content);
             }
         }
     }

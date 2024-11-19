@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.AI.Projects" Version="1.0.0-alpha.20241114.3" />
+    <PackageReference Include="Azure.AI.Projects" Version="1.0.0-alpha.20241118.5" />
   </ItemGroup>
   
    <ItemGroup>
